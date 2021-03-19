@@ -2,6 +2,8 @@
 package looper
 
 import (
+	"context"
+	"runtime"
 	"time"
 )
 
@@ -34,11 +36,38 @@ type ConditionalLooper interface {
 	Condition() bool
 }
 
-// ConditionalIntervalLooper defines types the should run in a loop
-// when a condition is satisfied on a ticker
-type ConditionalIntervalLooper interface {
-	IntervalLooper
-	ConditionalLooper
+func watchConditional(ctx context.Context, condition Condition) <-chan struct{} {
+	match := make(chan struct{})
+
+	go func() {
+		for {
+			runtime.Gosched()
+
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			if !condition() {
+				continue
+			}
+
+			select {
+			case match <- struct{}{}:
+			default:
+			}
+		}
+	}()
+
+	return match
+}
+
+// ChannelLooper defines types that should run in a loop
+// whenever a channel can be read
+type ChannelLooper interface {
+	Looper
+	Channel() <-chan struct{}
 }
 
 // NewLooper creates a new LooperInterval using the arguments
